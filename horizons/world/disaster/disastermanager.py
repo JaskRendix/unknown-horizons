@@ -19,13 +19,21 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 from horizons.constants import GAME_SPEED
 from horizons.scheduler import Scheduler
 from horizons.util.worldobject import WorldObject
 from horizons.world.disaster.blackdeathdisaster import BlackDeathDisaster
 from horizons.world.disaster.firedisaster import FireDisaster
+
+if TYPE_CHECKING:
+	from horizons.session import Session
+	from horizons.world.disaster import Disaster
+	from horizons.world.settlement import Settlement
 
 
 class DisasterManager:
@@ -38,29 +46,30 @@ class DisasterManager:
 	CALL_EVERY = GAME_SPEED.TICKS_PER_SECOND * 60
 	#CALL_EVERY = 1 # to conjure the demons of armageddon
 
-	def __init__(self, session, disabled=False):
+	def __init__(self, session: Session, disabled: bool = False) -> None:
 		"""
 		@param disabled: Don't do anything at all if True (but be responsive to normal calls)"""
-		from horizons.session import Session
-		assert isinstance(session, Session)
 		self.session = session
 		self.disabled = disabled
 		# List of possible disaster classes
-		self.disasters = [FireDisaster, BlackDeathDisaster]
+		self.disasters: list[type[Disaster]] = [
+			FireDisaster,
+			BlackDeathDisaster,
+		]
 
 		# Mapping settlement -> active disasters
-		self._active_disaster = {}
+		self._active_disaster: dict[Settlement, Disaster] = {}
 
 		# keep call also when disabled, simplifies save/load
 		Scheduler().add_new_object(self.run, self, run_in=self.CALL_EVERY, loops=-1)
 
-	def save(self, db):
+	def save(self, db) -> None:
 		ticks = Scheduler().get_remaining_ticks(self, self.run, True)
 		db("INSERT INTO disaster_manager(remaining_ticks) VALUES(?)", ticks)
 		for disaster in self._active_disaster.values():
 			disaster.save(db)
 
-	def load(self, db):
+	def load(self, db) -> None:
 		db_data = db("SELECT remaining_ticks FROM disaster_manager")
 		if db_data:
 			Scheduler().rem_all_classinst_calls(self)
@@ -70,12 +79,12 @@ class DisasterManager:
 
 		for disaster_id, disaster_type, settlement_id in db("SELECT rowid, type, settlement FROM disaster"):
 			settlement = WorldObject.get_object_by_id(settlement_id)
-			klass = next((i for i in self.disasters if i.TYPE == disaster_type))
+			klass = next(i for i in self.disasters if disaster_type == i.TYPE)
 			cata = klass(settlement, self)
 			self._active_disaster[settlement] = cata
 			cata.load(db, disaster_id)
 
-	def run(self):
+	def run(self) -> None:
 		if self.disabled:
 			return
 		for settlement in self.session.world.settlements:
@@ -91,17 +100,17 @@ class DisasterManager:
 							self.log.debug("Disaster %s would breakout apply but can't breakout",
 							               disaster)
 
-	def end_disaster(self, settlement):
+	def end_disaster(self, settlement: Settlement) -> None:
 		# End the disaster
 		self.log.debug("ending desaster in %s", settlement)
 		self._active_disaster[settlement].end()
 		del self._active_disaster[settlement]
 
-	def is_affected(self, settlement):
+	def is_affected(self, settlement: Settlement) -> bool:
 		"""Returns whether there is currently a disaster in a settlement"""
 		return settlement in self._active_disaster
 
-	def get_disaster(self, settlement):
+	def get_disaster(self, settlement: Settlement) -> Disaster | None:
 		"""Returns the currently active disaster for the given settlement. None is
 		returned in case no disaster is currently active."""
 		if self.is_affected(settlement):
