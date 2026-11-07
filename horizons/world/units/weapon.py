@@ -19,7 +19,10 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 from horizons.component.healthcomponent import HealthComponent
 from horizons.constants import GAME_SPEED
@@ -27,6 +30,9 @@ from horizons.scheduler import Scheduler
 from horizons.util.changelistener import metaChangeListenerDecorator
 from horizons.util.python.callback import Callback
 from horizons.util.shapes import Point
+
+if TYPE_CHECKING:
+	from horizons.session import Session
 
 
 @metaChangeListenerDecorator("attack_ready")
@@ -45,7 +51,7 @@ class Weapon:
 	"""
 	log = logging.getLogger("world.combat")
 
-	def __init__(self, session, id):
+	def __init__(self, session: Session, id: int) -> None:
 		"""
 		@param session: game session
 		@param id: weapon id to be initialized
@@ -56,27 +62,33 @@ class Weapon:
 		                          attack_radius \
 		                  FROM weapon WHERE id = ?", id)
 		data = data[0]
-		self.weapon_id = data[0]
-		self.weapon_type = data[1]
-		self.damage = data[2]
-		self.weapon_range = data[3], data[4]
-		self.cooldown_time = data[5]
-		self.attack_speed = data[6]
-		self.attack_radius = data[7]
-		self.attack_ready = True
-		self.session = session
+		self.weapon_id: int = data[0]
+		self.weapon_type: str = data[1]
+		self.damage: int = data[2]
+		self.weapon_range: tuple[int, int] = (data[3], data[4])
+		self.cooldown_time: float = data[5]
+		self.attack_speed: float = data[6]
+		self.attack_radius: int = data[7]
+		self.attack_ready: bool = True
+		self.session: Session = session
 
-	def get_damage_modifier(self):
+	def get_damage_modifier(self) -> int:
 		return self.damage
 
-	def get_minimum_range(self):
+	def get_minimum_range(self) -> int:
 		return self.weapon_range[0]
 
-	def get_maximum_range(self):
+	def get_maximum_range(self) -> int:
 		return self.weapon_range[1]
 
 	@classmethod
-	def on_impact(cls, session, weapon_id, damage, position):
+	def on_impact(
+		cls,
+		session: Session,
+		weapon_id: int,
+		damage: int,
+		position: Point,
+	) -> None:
 		"""
 		Classmethod that deals damage to units at position, depending on weapon_id
 		Damage is done independent of the weapon instance, which may not exist at the time damage is done
@@ -95,11 +107,11 @@ class Weapon:
 			cls.log.debug("dealing damage to %s", unit)
 			unit.get_component(HealthComponent).deal_damage(weapon_id, damage)
 
-	def make_attack_ready(self):
+	def make_attack_ready(self) -> None:
 		self.attack_ready = True
 		self.on_attack_ready()
 
-	def fire(self, destination, position):
+	def fire(self, destination: Point, position: Point) -> None:
 		"""
 		Fires the weapon at a certain destination
 		@param destination: Point with position where weapon will be fired
@@ -130,14 +142,14 @@ class Weapon:
 		self.attack_ready = False
 		self.on_weapon_fired()
 
-	def check_target_in_range(self, distance):
+	def check_target_in_range(self, distance: int) -> bool:
 		"""
 		Checks if the distance between the weapon and target is in weapon range
 		@param distance : distance between weapon and target
 		"""
 		return self.weapon_range[0] <= distance <= self.weapon_range[1]
 
-	def get_ticks_until_ready(self):
+	def get_ticks_until_ready(self) -> int:
 		"""
 		Returns the number of ticks until the attack is ready
 		If attack is ready return 0
@@ -145,7 +157,7 @@ class Weapon:
 		return 0 if self.attack_ready else Scheduler().get_remaining_ticks(self, self.make_attack_ready)
 
 	@classmethod
-	def load_attacks(cls, session, db):
+	def load_attacks(cls, session: Session, db) -> None:
 		"""
 		Loads ongoing attacks from savegame database
 		Creates scheduled calls for on_impact
@@ -156,7 +168,7 @@ class Weapon:
 				session, weapon_id, damage, Point(dx, dy)), Weapon, ticks)
 
 	@classmethod
-	def save_attacks(cls, db):
+	def save_attacks(cls, db) -> None:
 		"""
 		Saves ongoing attacks
 		"""
@@ -171,8 +183,8 @@ class Weapon:
 			db("INSERT INTO attacks(remaining_ticks, weapon_id, damage, dest_x, dest_y) VALUES (?, ?, ?, ?, ?)",
 				ticks, weapon_id, damage, dest_x, dest_y)
 
-	def __str__(self):
-		return "Weapon(id:{};type:{};rang:{})".format(self.weapon_id, self.weapon_type, self.weapon_range)
+	def __str__(self) -> str:
+		return f"Weapon(id:{self.weapon_id};type:{self.weapon_type};range:{self.weapon_range})"
 
 
 class SetStackableWeaponNumberError(Exception):
@@ -189,15 +201,15 @@ class StackableWeapon(Weapon):
 	It deals the number of weapons times weapon's default damage
 	This is used for cannons, reducing the number of instances and bullets fired
 	"""
-	def __init__(self, session, id):
+	def __init__(self, session: Session, id: int) -> None:
 		super().__init__(session, id)
 		self.__init()
 
-	def __init(self):
-		self.number_of_weapons = 1
-		self.max_number_of_weapons = 1
+	def __init(self) -> None:
+		self.number_of_weapons: int = 1
+		self.max_number_of_weapons: int = 1
 
-	def set_number_of_weapons(self, number):
+	def set_number_of_weapons(self, number: int) -> None:
 		"""
 		Sets number of cannons as resource binded to a StackableWeapon object
 		the number of cannons increases the damage dealt by one StackableWeapon instance
@@ -208,7 +220,7 @@ class StackableWeapon(Weapon):
 		else:
 			self.number_of_weapons = number
 
-	def increase_number_of_weapons(self, number):
+	def increase_number_of_weapons(self, number: int) -> None:
 		"""
 		Increases number of cannons as resource binded to a StackableWeapon object
 		@param number : number of cannons
@@ -218,7 +230,7 @@ class StackableWeapon(Weapon):
 		else:
 			self.number_of_weapons += number
 
-	def decrease_number_of_weapons(self, number):
+	def decrease_number_of_weapons(self, number: int) -> None:
 		"""
 		Decreases number of cannons as resource binded to a StackableWeapon object
 		@param number : number of cannons
@@ -228,5 +240,5 @@ class StackableWeapon(Weapon):
 		else:
 			self.number_of_weapons -= number
 
-	def get_damage_modifier(self):
+	def get_damage_modifier(self) -> int:
 		return self.number_of_weapons * super().get_damage_modifier()
