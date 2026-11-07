@@ -19,7 +19,13 @@
 # 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 # ###################################################
 
+from typing import Literal
+
 from horizons.util.changelistener import metaChangeListenerDecorator
+from horizons.world.player import Player
+
+type DiplomacyPair = tuple[Player, Player]
+type DiplomacyState = Literal["ally", "neutral", "enemy"]
 
 
 @metaChangeListenerDecorator("diplomacy_status_changed")
@@ -40,11 +46,11 @@ class Diplomacy:
 			b is second player
 	"""
 
-	def __init__(self):
-		self.allies = set()
-		self.enemies = set()
+	def __init__(self) -> None:
+		self.allies: set[DiplomacyPair] = set()
+		self.enemies: set[DiplomacyPair] = set()
 
-	def add_ally_pair(self, a, b):
+	def add_ally_pair(self, a: Player, b: Player) -> None:
 		tup = make_tup(a, b)
 		if tup is None or tup in self.allies:
 			return
@@ -53,7 +59,7 @@ class Diplomacy:
 		self.allies.add(tup)
 		self.on_diplomacy_status_changed(old_state=old_state, new_state='ally', a=a, b=b)
 
-	def add_enemy_pair(self, a, b):
+	def add_enemy_pair(self, a: Player, b: Player) -> None:
 		tup = make_tup(a, b)
 		if tup is None or tup in self.enemies:
 			return
@@ -62,7 +68,7 @@ class Diplomacy:
 		self.enemies.add(tup)
 		self.on_diplomacy_status_changed(old_state=old_state, new_state='enemy', a=a, b=b)
 
-	def add_neutral_pair(self, a, b):
+	def add_neutral_pair(self, a: Player, b: Player) -> None:
 		tup = make_tup(a, b)
 		if tup is None or (tup not in self.allies and tup not in self.enemies):
 			return
@@ -71,46 +77,46 @@ class Diplomacy:
 		self.remove_enemy_pair(a, b)
 		self.on_diplomacy_status_changed(old_state=old_state, new_state='neutral', a=a, b=b)
 
-	def remove_enemy_pair(self, a, b):
+	def remove_enemy_pair(self, a: Player, b: Player) -> None:
 		tup = make_tup(a, b)
 		if tup is None:
 			return
 		if tup in self.enemies:
 			self.enemies.remove(tup)
 
-	def remove_ally_pair(self, a, b):
+	def remove_ally_pair(self, a: Player, b: Player) -> None:
 		tup = make_tup(a, b)
 		if tup is None:
 			return
 		if tup in self.allies:
 			self.allies.remove(tup)
 
-	def are_allies(self, a, b):
+	def are_allies(self, a: Player, b: Player) -> bool:
 		if a is b:
 			return True
 		tup = make_tup(a, b)
 		return tup in self.allies
 
-	def are_enemies(self, a, b):
+	def are_enemies(self, a: Player, b: Player) -> bool:
 		if a is b:
 			return False
 		tup = make_tup(a, b)
 		return tup in self.enemies
 
-	def are_neutral(self, a, b):
+	def are_neutral(self, a: Player, b: Player) -> bool:
 		if a is b:
 			return False
 		tup = make_tup(a, b)
 		return tup not in self.allies and tup not in self.enemies
 
-	def can_trade(self, a, b):
+	def can_trade(self, a: Player, b: Player) -> bool:
 		# NOTE: this has not been specified w.r.t. game play
 		if a is b: # can trade with self
 			return True
 		else:
 			return not self.are_enemies(a, b)
 
-	def _get_state_string(self, tup):
+	def _get_state_string(self, tup: DiplomacyPair) -> DiplomacyState:
 		if tup in self.enemies:
 			return 'enemy'
 		elif tup in self.allies:
@@ -118,7 +124,7 @@ class Diplomacy:
 		else:
 			return 'neutral'
 
-	def load(self, world, db):
+	def load(self, world, db) -> None:
 		for a, b in db("SELECT player1, player2 FROM diplomacy_allies"):
 			tup = world.get_object_by_id(a), world.get_object_by_id(b)
 			self.allies.add(tup)
@@ -126,7 +132,7 @@ class Diplomacy:
 			tup = world.get_object_by_id(a), world.get_object_by_id(b)
 			self.enemies.add(tup)
 
-	def save(self, db):
+	def save(self, db) -> None:
 		for tup in self.allies:
 			db("INSERT INTO diplomacy_allies(player1, player2) VALUES(?, ?)",
 				tup[0].worldid, tup[1].worldid)
@@ -135,7 +141,7 @@ class Diplomacy:
 				tup[0].worldid, tup[1].worldid)
 
 
-def make_tup(a, b):
+def make_tup(a: Player, b: Player) -> DiplomacyPair | None:
 	"""
 	Utility function that returns x,y tuple with x.worldid < y.worldid
 	"""
